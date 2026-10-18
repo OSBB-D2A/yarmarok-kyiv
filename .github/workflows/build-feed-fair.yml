@@ -48,14 +48,43 @@ jobs:
           print(f"Validated {len(data['incidents'])} Waze incidents")
           PY
 
-      - name: Commit updated feed
+      - name: Commit and push updated feed safely
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add outpoot/feed_fair.json
           if git diff --cached --quiet; then
             echo "Feed is already up to date."
-          else
-            git commit -m "Update Waze fair feed from official GIS API"
-            git push
+            exit 0
           fi
+          git commit -m "Update Waze fair feed from official GIS API"
+
+          # The branch may advance while the feed is being generated.
+          # Rebase when possible; if the generated feed conflicts, rebuild it
+          # from the newest main instead of overwriting remote changes.
+          for attempt in 1 2 3; do
+            git fetch origin main
+            if git rebase origin/main; then
+              if git push origin HEAD:main; then
+                exit 0
+              fi
+              git rebase --abort || true
+            else
+              git rebase --abort || true
+            fi
+
+            echo "Remote main changed; refreshing checkout and rebuilding feed (attempt $attempt/3)."
+            git fetch origin main
+            git reset --hard origin/main
+            python src/build_feed_fair.py
+            python -m json.tool outpoot/feed_fair.json > /dev/null
+            git add outpoot/feed_fair.json
+            if git diff --cached --quiet; then
+              echo "Latest main already has the current feed."
+              exit 0
+            fi
+            git commit -m "Update Waze fair feed from official GIS API"
+          done
+
+          echo "Could not push feed after 3 attempts because main kept changing."
+          exit 1
