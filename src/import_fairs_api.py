@@ -17,8 +17,8 @@ from zoneinfo import ZoneInfo
 BASE_URL = "https://gisserver.kyivcity.gov.ua/mayno/rest/services/KYIV_API/Trade_api/MapServer"
 LAYERS = {
     1: "planned",
-    4: "conducted",
-    7: "cancelled",
+    5: "conducted",
+    8: "cancelled",
 }
 START = date(2026, 10, 13)
 END = date(2026, 10, 18)
