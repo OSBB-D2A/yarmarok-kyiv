@@ -1,0 +1,61 @@
+name: Build Waze fair feed
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 3 * * *"
+  push:
+    branches: [main]
+    paths:
+      - "src/build_feed_fair.py"
+      - "data/waze-location-mapping.json"
+      - ".github/workflows/build-feed-fair.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-waze-fair-feed
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build feed from the official GIS API
+        run: python src/build_feed_fair.py
+
+      - name: Validate generated JSON
+        run: |
+          python -m json.tool outpoot/feed_fair.json > /dev/null
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path("outpoot/feed_fair.json").read_text(encoding="utf-8"))
+          assert isinstance(data.get("incidents"), list) and data["incidents"]
+          required = {"polyline", "direction", "starttime", "endtime", "description", "event", "id", "type", "subtype", "street"}
+          assert all(required <= incident.keys() for incident in data["incidents"])
+          assert all(item["description"] == "Ярмарок" and item["event"] == "Fair" for item in data["incidents"])
+          print(f"Validated {len(data['incidents'])} Waze incidents")
+          PY
+
+      - name: Commit updated feed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add outpoot/feed_fair.json
+          if git diff --cached --quiet; then
+            echo "Feed is already up to date."
+          else
+            git commit -m "Update Waze fair feed from official GIS API"
+            git push
+          fi
