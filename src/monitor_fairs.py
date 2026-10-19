@@ -115,11 +115,29 @@ _SEGMENT_CACHE: dict[str, list[tuple[str, str]]] = {}
 def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
                   incidents: list[dict], api_error: str | None) -> str:
     now = datetime.now(KYIV).isoformat(timespec="seconds")
-    future_api = sorted(future_api, key=lambda x: (x["date"], x.get("district") or "", x.get("address") or ""))
+    future_api = sorted(future_api, key=lambda x: (x["date"], x.get("district") or "", normalize(x.get("address") or x.get("address_kd")), x.get("objectid") or 0))
+    # In the report, combine duplicate API rows for the same date/location and
+    # show every source objectid in one comma-separated cell.
+    grouped: dict[tuple[str, str, str], list[dict]] = {}
+    for item in future_api:
+        location = normalize(item.get("address") or item.get("address_kd"))
+        key = (item.get("date") or "", item.get("district") or "", location)
+        grouped.setdefault(key, []).append(item)
+    report_rows = []
+    for items in grouped.values():
+        item = dict(items[0])
+        objectids = sorted(
+            {str(row["objectid"]) for row in items if row.get("objectid") is not None},
+            key=lambda value: (not value.isdigit(), int(value) if value.isdigit() else value),
+        )
+        item["objectids"] = ", ".join(objectids) or "—"
+        statuses = list(dict.fromkeys(row.get("status") for row in items if row.get("status")))
+        item["status"] = ", ".join(statuses) or ""
+        report_rows.append(item)
     incident_dates = sorted({i.get("starttime", "")[:10] for i in incidents})
     rows_html = []
     mapped_count = 0
-    for item in future_api:
+    for item in report_rows:
         sent, waze_url, mapped_place = mapping_feed_status(item, mapping, incidents)
         if sent and waze_url:
             mapped_count += 1
@@ -136,7 +154,7 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
             f"<td>{html.escape(item.get('district') or '—')}</td>"
             f"<td>{html.escape(item.get('address') or item.get('address_kd') or '—')}</td>"
             f"<td>{html.escape(item.get('status') or '—')}</td>"
-            f"<td>{html.escape(str(item.get('objectid') or '—'))}</td>"
+            f"<td>{html.escape(item.get('objectids') or str(item.get('objectid') or '—'))}</td>"
             f"<td>{feed_status}</td></tr>"
         )
 
@@ -156,11 +174,11 @@ table{{width:100%;border-collapse:collapse;margin:12px 0 28px}}th,td{{padding:9p
 <h1>Моніторинг сезонних ярмарків Києва</h1>
 <p class="meta">Оновлено: {html.escape(now)} · Часовий пояс Europe/Kyiv</p>
 <div class="status"><strong>Стан:</strong> {html.escape(status)}<br>
-Записи GIS API на сьогодні/майбутнє: {len(future_api)} · Зіставлено з геометрією та feed: {mapped_count} · Інциденти у Waze feed: {len(incidents)} · Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</div>
+Записи GIS API на сьогодні/майбутнє: {len(future_api)} · Унікальні локації/дати у звіті: {len(report_rows)} · Зіставлено з геометрією та feed: {mapped_count} · Інциденти у Waze feed: {len(incidents)} · Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</div>
 {api_error_html}
 <h2>GIS API → Waze feed</h2>
 <p>Єдине джерело даних про дати та адреси — офіційний GIS API, шар «Заплановані». У Waze feed додаються лише записи API, для яких знайдено відповідну геометрію в mapping-файлі. Час інцидентів — 07:00–17:00 за київським часом. Посилання Waze відкриває відповідні координати.</p>
-<div class="scroll"><table><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус API</th><th>Object ID</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
+<div class="scroll"><table><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус API</th><th>Object ID (дублікати об’єднано)</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
 <h2>Джерела та файли</h2><ul>
 <li><a href="https://gisserver.kyivcity.gov.ua/mayno/rest/services/KYIV_API/Trade_api/MapServer/1" target="_blank" rel="noopener">GIS API — шар «Заплановані»</a></li>
 <li><a href="https://github.com/OSBB-D2A/yarmarok-kyiv/blob/main/outpoot/feed_fair.json">Поточний Waze feed JSON</a></li>
