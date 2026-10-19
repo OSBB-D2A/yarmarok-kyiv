@@ -230,6 +230,13 @@ def main() -> int:
     except Exception as exc:
         site_error = str(exc)
         print(f"WARNING: website collection failed: {site_error}", file=sys.stderr)
+        # Keep the last known website snapshot so the report remains useful when
+        # the portal temporarily returns HTTP 403 or is unavailable.
+        try:
+            site_data = json.loads(SITE_JSON_PATH.read_text(encoding="utf-8"))
+            print(f"Using saved website snapshot ({len(site_data.get('fairs', []))} locations).")
+        except (FileNotFoundError, json.JSONDecodeError):
+            site_data = None
     try:
         api_rows = fetch_api_rows()
         save_json(API_JSON_PATH, {
