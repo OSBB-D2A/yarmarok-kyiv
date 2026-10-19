@@ -165,26 +165,55 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
 <html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Моніторинг сезонних ярмарків Києва</title>
 <style>
-:root{{color-scheme:light dark;--line:#8885;--muted:#777;--yes:#16803c;--no:#b42318}}
-body{{font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:1600px;margin:0 auto;padding:24px}}
-h1{{line-height:1.2}} .meta{{color:var(--muted)}} .status{{padding:12px 16px;border:1px solid var(--line);border-radius:10px;margin:16px 0}}
-table{{width:100%;border-collapse:collapse;margin:12px 0 28px}}th,td{{padding:9px 10px;border:1px solid var(--line);text-align:left;vertical-align:top}}th{{position:sticky;top:0;background:Canvas}}tr:nth-child(even){{background:color-mix(in srgb,CanvasText 4%,Canvas)}}
-.yes{{color:var(--yes);font-weight:650}}.no,.error{{color:var(--no);font-weight:650}}a{{overflow-wrap:anywhere}}.scroll{{overflow-x:auto}}small{{color:var(--muted)}}
-</style></head><body>
+:root{{color-scheme:dark;--bg:#080d18;--panel:#111a2b;--panel2:#172338;--line:#263650;--text:#e8eef8;--muted:#93a4bd;--accent:#7c9cff;--accent2:#54d6c7;--yes:#54d6a0;--no:#ff7b87;--shadow:0 18px 50px #0005}}
+*{{box-sizing:border-box}}
+body{{margin:0;background:radial-gradient(ellipse at 12% 0%,#1a2c4c 0,transparent 38%),var(--bg);color:var(--text);font:15px/1.6 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;min-height:100vh}}
+main{{max-width:1500px;margin:0 auto;padding:clamp(18px,4vw,48px)}}
+header{{padding:clamp(22px,4vw,42px);border:1px solid var(--line);border-radius:24px;background:linear-gradient(125deg,#172944dd,#101827ee);box-shadow:var(--shadow);position:relative;overflow:hidden}}
+header:after{{content:"";position:absolute;width:230px;height:230px;right:-75px;top:-100px;border-radius:50%;background:#728eff18;filter:blur(2px)}}
+.eyebrow{{color:var(--accent2);font-size:.76rem;letter-spacing:.15em;text-transform:uppercase;font-weight:750}}
+h1{{font-size:clamp(1.8rem,4vw,3rem);line-height:1.12;letter-spacing:-.04em;margin:.55rem 0 1rem;max-width:850px}}
+h2{{font-size:1.2rem;letter-spacing:-.02em;margin:32px 0 12px}}
+p{{color:#c2cde0}}.meta{{font-size:.88rem;color:var(--muted);margin:0}}
+.status{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}
+.metric{{padding:18px 20px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#17243a,#101827);min-width:0}}
+.metric strong{{display:block;color:var(--muted);font-size:.78rem;font-weight:650;margin-bottom:6px}}
+.metric span{{font-size:1.5rem;font-weight:750;letter-spacing:-.03em;overflow-wrap:anywhere}}
+.panel{{padding:20px 22px;background:var(--panel);border:1px solid var(--line);border-radius:18px;margin:16px 0}}
+.error{{color:#ffadb4;background:#351a27;border:1px solid #713140;border-radius:14px;padding:15px 18px;overflow-wrap:anywhere}}
+.scroll{{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:#0d1523;box-shadow:var(--shadow)}}
+table{{width:100%;border-collapse:separate;border-spacing:0;min-width:850px}}
+th,td{{padding:13px 15px;border-bottom:1px solid #223149;text-align:left;vertical-align:top}}
+th{{position:sticky;top:0;background:#18253a;color:#aebed6;font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}}
+tbody tr{{transition:background .15s ease}}tbody tr:hover{{background:#192840}}tbody tr:last-child td{{border-bottom:0}}
+.yes{{display:inline-block;color:#7be0b4;background:#15392f;padding:3px 9px;border-radius:999px;font-size:.8rem;font-weight:700}}
+.no{{display:inline-block;color:#ff9da7;background:#3a202b;padding:3px 9px;border-radius:999px;font-size:.8rem;font-weight:700}}
+a{{color:#9bb4ff;text-decoration:none}}a:hover{{color:#d1dcff;text-decoration:underline}}small{{display:inline-block;color:var(--muted);margin-top:5px}}ul{{padding-left:20px;color:var(--muted)}}li{{margin:8px 0}}
+footer{{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}}
+@media(max-width:640px){{main{{padding:14px}}header{{border-radius:18px}}.panel{{padding:15px}}.metric{{padding:14px}}}}
+</style></head><body><main>
+<header><div class="eyebrow">Kyiv · GIS data monitor</div>
 <h1>Моніторинг сезонних ярмарків Києва</h1>
-<p class="meta">Оновлено: {html.escape(now)} · Часовий пояс Europe/Kyiv</p>
-<div class="status"><strong>Стан:</strong> {html.escape(status)}<br>
-Записи GIS API на сьогодні/майбутнє: {len(future_api)} · Унікальні локації/дати у звіті: {len(report_rows)} · Зіставлено з геометрією та feed: {mapped_count} · Інциденти у Waze feed: {len(incidents)} · Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</div>
+<p class="meta">Оновлено: {html.escape(now)} · Часовий пояс Europe/Kyiv · Автоматична перевірка щогодини</p></header>
+<div class="status">
+<div class="metric"><strong>Стан джерела</strong><span>{html.escape(status)}</span></div>
+<div class="metric"><strong>Записи GIS API</strong><span>{len(future_api)}</span></div>
+<div class="metric"><strong>Унікальні локації / дати</strong><span>{len(report_rows)}</span></div>
+<div class="metric"><strong>Інциденти у Waze feed</strong><span>{len(incidents)}</span></div>
+<div class="metric"><strong>Зіставлено з геометрією</strong><span>{mapped_count}</span></div>
+</div>
 {api_error_html}
-<h2>GIS API → Waze feed</h2>
-<p>Єдине джерело даних про дати та адреси — офіційний GIS API, шар «Заплановані». У Waze feed додаються лише записи API, для яких знайдено відповідну геометрію в mapping-файлі. Час інцидентів — 07:00–17:00 за київським часом. Посилання Waze відкриває відповідні координати.</p>
-<div class="scroll"><table><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус API</th><th>Object ID (дублікати об’єднано)</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
-<h2>Джерела та файли</h2><ul>
-<li><a href="https://gisserver.kyivcity.gov.ua/mayno/rest/services/KYIV_API/Trade_api/MapServer/1" target="_blank" rel="noopener">GIS API — шар «Заплановані»</a></li>
+<section class="panel"><h2>Як формується Waze feed</h2>
+<p>Єдине джерело дат та адрес — офіційний GIS API, шар «Заплановані». До Waze feed потрапляють лише записи, для яких знайдено геометрію в mapping-файлі. Час інцидентів — 07:00–17:00 за київським часом. Дублікати API з однаковою датою та адресою згруповано, а всі Object ID наведено в одному рядку.</p>
+<p class="meta">Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</p></section>
+<h2>Заплановані ярмарки</h2>
+<div class="scroll"><table><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус API</th><th>Object ID</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
+<h2>Джерела та файли</h2><section class="panel"><ul>
+<li><a href="https://gisserver.kyivcity.gov.ua/mayno/rest/services/KYIV_API/Trade_api/MapServer/1" target="_blank" rel="noopener">Офіційний GIS API — шар «Заплановані»</a></li>
 <li><a href="https://github.com/OSBB-D2A/yarmarok-kyiv/blob/main/outpoot/feed_fair.json">Поточний Waze feed JSON</a></li>
 <li><a href="https://github.com/OSBB-D2A/yarmarok-kyiv/blob/main/outpoot/fairs-api.json">Знімок даних GIS API</a></li>
-</ul>
-</body></html>
+</ul></section><footer>OSBB-D2A · Автоматичний моніторинг ярмарків Києва</footer>
+</main></body></html>
 """
 
 
@@ -249,34 +278,90 @@ def main() -> int:
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(render_report(api_rows, future_api, mapping, incidents, api_error), encoding="utf-8")
 
-    # Notify only for successful API snapshots whose data changed. A temporary
-    # API failure is not a data change and must not generate a Telegram message.
-    snapshot = {"api_rows": api_rows, "api_error": None}
-    digest = hashlib.sha256(json.dumps(snapshot, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-    previous = {}
+    # Persist outage state only when it changes; this avoids hourly commits.
+    # If the GIS API stays unavailable for 14 full days, alert on day 15 and
+    # repeat every 7 days until a successful API response clears the outage.
     try:
         previous = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
-        pass
-    changed = api_error is None and previous.get("digest") != digest
-    if changed:
-        save_json(STATE_PATH, {"digest": digest, "checked_at": now.isoformat(timespec="seconds")})
-        if not os.getenv("SKIP_TELEGRAM"):
+        previous = {}
+    state = dict(previous)
+    changed = False
+    digest = hashlib.sha256(json.dumps(
+        {"api_rows": api_rows, "api_error": None}, ensure_ascii=False, sort_keys=True
+    ).encode()).hexdigest()
+
+    if api_error:
+        if not state.get("api_failure_since"):
+            state["api_failure_since"] = now.isoformat(timespec="seconds")
+            changed = True
+        try:
+            failure_since = datetime.fromisoformat(state["api_failure_since"])
+            if failure_since.tzinfo is None:
+                failure_since = failure_since.replace(tzinfo=KYIV)
+            outage_days = (now - failure_since).total_seconds() / 86400
+        except (ValueError, TypeError):
+            failure_since = now
+            outage_days = 0
+            state["api_failure_since"] = now.isoformat(timespec="seconds")
+            changed = True
+
+        last_alert = state.get("last_api_failure_alert_at")
+        alert_due = outage_days >= 14
+        if last_alert:
+            try:
+                last_alert_dt = datetime.fromisoformat(last_alert)
+                if last_alert_dt.tzinfo is None:
+                    last_alert_dt = last_alert_dt.replace(tzinfo=KYIV)
+                alert_due = alert_due and (now - last_alert_dt).total_seconds() >= 7 * 86400
+            except (ValueError, TypeError):
+                alert_due = outage_days >= 14
+        if alert_due and not os.getenv("SKIP_TELEGRAM"):
             msg = (
-                "🔔 <b>Оновлено дані про ярмарки Києва</b>\n"
-                f"GIS API: {len(future_api)} записів на сьогодні/майбутнє.\n"
-                f"У Waze feed зараз {len(incidents)} інцидентів.\n"
+                "🚨 <b>Помилка моніторингу ярмарків Києва</b>\n"
+                "Не вдається отримати дані з офіційного GIS API вже "
+                f"{int(outage_days)} днів.\n"
+                f"<b>Остання помилка:</b> {html.escape(api_error)}\n"
+                "Наступне нагадування надійде через 7 днів, якщо доступ не відновиться.\n"
                 f'📊 <a href="{REPORT_URL}">Відкрити сторінку звіту</a>'
             )
             try:
                 send_telegram(msg)
+                state["last_api_failure_alert_at"] = now.isoformat(timespec="seconds")
+                changed = True
             except Exception as exc:
                 print(f"TELEGRAM ERROR: {exc}", file=sys.stderr)
                 raise
-    elif api_error:
-        print("GIS API request failed; notification and digest update skipped.")
+        elif alert_due and os.getenv("SKIP_TELEGRAM"):
+            print("SKIP_TELEGRAM set; outage alert suppressed during workflow retry.")
+        print(f"GIS API unavailable for {int(outage_days)} days; outage alert due={alert_due}.")
     else:
-        print("No GIS API data changes; Telegram notification not sent.")
+        # Successful response ends the consecutive outage period.
+        if state.pop("api_failure_since", None) is not None:
+            changed = True
+        if state.pop("last_api_failure_alert_at", None) is not None:
+            changed = True
+        if state.get("digest") != digest:
+            state["digest"] = digest
+            state["checked_at"] = now.isoformat(timespec="seconds")
+            changed = True
+            if not os.getenv("SKIP_TELEGRAM"):
+                msg = (
+                    "🔔 <b>Оновлено дані про ярмарки Києва</b>\n"
+                    f"GIS API: {len(future_api)} записів на сьогодні/майбутнє.\n"
+                    f"У Waze feed зараз {len(incidents)} інцидентів.\n"
+                    f'📊 <a href="{REPORT_URL}">Відкрити сторінку звіту</a>'
+                )
+                try:
+                    send_telegram(msg)
+                except Exception as exc:
+                    print(f"TELEGRAM ERROR: {exc}", file=sys.stderr)
+                    raise
+        else:
+            print("No GIS API data changes; Telegram notification not sent.")
+
+    if changed:
+        save_json(STATE_PATH, state)
     print(f"Report saved: {REPORT_PATH}; future API rows: {len(future_api)}; feed incidents: {len(incidents)}")
     return 0
 
