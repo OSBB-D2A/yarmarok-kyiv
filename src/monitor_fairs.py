@@ -14,7 +14,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from build_feed_fair import BASE_URL, FIELDS, KYIV, MAPPING_PATH, OUTPUT_PATH, get_segments, normalize
+from build_feed_fair import BASE_URL, FIELDS, KYIV, MAPPING_PATH, OUTPUT_PATH, address_match_score, get_segments, normalize
 
 API_LAYER = 1
 REPORT_PATH = Path("outpoot/fairs-report.html")
@@ -78,8 +78,9 @@ def day_label(iso_date: str | None) -> str:
 
 def mapping_feed_status(api_item: dict, mapping: dict, incidents: list[dict]) -> tuple[bool, str | None, str | None]:
     api_date = api_item.get("date")
-    address = normalize(api_item.get("address") or api_item.get("address_kd"))
     candidates = []
+    street_to_records: dict[str, set[int]] = {}
+    records = []
     for record in mapping.get("records", []):
         if (record.get("description") or "").strip().casefold() != "ярмарок":
             continue
@@ -87,25 +88,46 @@ def mapping_feed_status(api_item: dict, mapping: dict, incidents: list[dict]) ->
         if cache_key not in _SEGMENT_CACHE:
             _SEGMENT_CACHE[cache_key] = get_segments(record)
         segments = _SEGMENT_CACHE[cache_key]
-        place = normalize(record.get("place"))
         streets = list(dict.fromkeys(street for _, street in segments))
-        norm_streets = [normalize(street) for street in streets]
-        place_match = bool(place and (place in address or address in place))
-        street_match = any(s and (s in address or address in s) for s in norm_streets)
-        if place_match or street_match:
-            candidates.append((record, segments, streets))
-    for record, segments, streets in candidates:
+        item = {"record": record, "segments": segments, "streets": streets}
+        records.append(item)
+        for street in streets:
+            street_to_records.setdefault(normalize(street), set()).add(len(records) - 1)
+
+    for idx, item in enumerate(records):
+        score = address_match_score(api_item, item["record"], item["streets"])
+        if score >= 100:
+            candidates.append((score, idx, True))
+        elif score > 0:
+            if any(
+                normalize(street) and len(street_to_records.get(normalize(street), set())) == 1
+                for street in item["streets"]
+            ):
+                candidates.append((score, idx, False))
+
+    exact = [candidate for candidate in candidates if candidate[2]]
+    if exact:
+        best_score = max(candidate[0] for candidate in exact)
+        selected = [candidate for candidate in exact if candidate[0] == best_score]
+    else:
+        selected = candidates if len({candidate[1] for candidate in candidates}) == 1 else []
+
+    for _, idx, _ in selected:
+        item = records[idx]
+        segments = item["segments"]
+        segment_polylines = {polyline for polyline, _ in segments}
         for incident in incidents:
             if api_date and incident.get("starttime", "")[:10] != api_date:
                 continue
-            if normalize(incident.get("street")) in {normalize(s) for s in streets}:
-                first = next((p for p in segments if p[0]), None)
-                if first:
-                    coord = first[0].split()
-                    if len(coord) >= 2:
-                        lat, lon = coord[0], coord[1]
-                        waze_url = f"https://waze.com/ul?ll={lat}%2C{lon}&navigate=yes"
-                        return True, waze_url, str(record.get("place") or incident.get("street") or "")
+            if incident.get("polyline") not in segment_polylines:
+                continue
+            first = next((p for p in segments if p[0]), None)
+            if first:
+                coord = first[0].split()
+                if len(coord) >= 2:
+                    lat, lon = coord[0], coord[1]
+                    waze_url = f"https://waze.com/ul?ll={lat}%2C{lon}&navigate=yes"
+                    return True, waze_url, str(item["record"].get("place") or incident.get("street") or "")
     return False, None, None
 
 
@@ -125,20 +147,22 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
         segments = get_segments(record)
         streets = list(dict.fromkeys(street for _, street in segments if street))
         key = str(record.get("place") or "")
-        template_usage[key] = {"place": key, "streets": streets, "count": 0, "latest": ""}
+        template_usage[key] = {"place": key, "record": record, "streets": streets, "count": 0, "latest": ""}
     unmatched_locations = {}
     for row in history_rows:
         addresses = [normalize(row.get("address")), normalize(row.get("address_kd"))]
         addresses = [a for a in addresses if a]
-        matched_key = None
+        scored_templates = []
         for key, template in template_usage.items():
-            place = normalize(template["place"])
-            streets = [normalize(street) for street in template["streets"]]
-            if any((place and (place in addr or addr in place)) or
-                   any(street and (street in addr or addr in street) for street in streets)
-                   for addr in addresses):
-                matched_key = key
-                break
+            score = address_match_score(row, template["record"], template["streets"])
+            if score >= 100:
+                scored_templates.append((score, key))
+        matched_key = None
+        if scored_templates:
+            best_score = max(score for score, _ in scored_templates)
+            best = [key for score, key in scored_templates if score == best_score]
+            if len(best) == 1:
+                matched_key = best[0]
         if matched_key is not None:
             template_usage[matched_key]["count"] += 1
             template_usage[matched_key]["latest"] = max(template_usage[matched_key]["latest"], row.get("date") or "")
