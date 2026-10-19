@@ -83,12 +83,15 @@ def fetch_planned_rows() -> list[dict]:
 
     today = datetime.now(KYIV).date()
     rows = []
-    for feature in payload.get("features", []):
+    all_dates = []
+    features = payload.get("features", [])
+    for feature in features:
         attrs = feature.get("attributes", {})
         stamp = attrs.get("date_release")
         if stamp is None:
             continue
         fair_date = datetime.fromtimestamp(stamp / 1000, tz=ZoneInfo("UTC")).astimezone(KYIV).date()
+        all_dates.append(fair_date)
         if fair_date < today:
             continue
         rows.append({
@@ -100,6 +103,16 @@ def fetch_planned_rows() -> list[dict]:
             "status": attrs.get("status_text") or "",
             "organizer": attrs.get("organizer") or "",
         })
+
+    print(f"GIS API planned layer: {len(features)} records returned; {len(rows)} on or after {today.isoformat()}.")
+    if all_dates:
+        print(
+            "GIS API date range: "
+            f"{min(all_dates).isoformat()}–{max(all_dates).isoformat()} "
+            f"(Kyiv local dates)."
+        )
+    else:
+        print("GIS API returned no records with a date_release value.")
     return rows
 
 
@@ -140,7 +153,11 @@ def main() -> int:
 
     api_rows = fetch_planned_rows()
     if not api_rows:
-        raise RuntimeError("The official GIS API returned no upcoming planned fair dates.")
+        raise RuntimeError(
+            "The official GIS API has no planned fair dates for today or later. "
+            "No new feed was written; the existing feed was left unchanged. "
+            "Check whether Kyiv has published the next dates in the API's 'Заплановані' layer."
+        )
 
     # Street fallback is accepted only when it identifies one mapping record.
     street_to_records: dict[str, set[int]] = defaultdict(set)
