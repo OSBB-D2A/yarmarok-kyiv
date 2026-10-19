@@ -202,7 +202,7 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
             feed_status = '<span class="no">Не потрапив у feed</span>'
         rows_html.append(
             "<tr>"
-            f"<td>{day_label(item.get('date'))}</td>"
+            f"<td data-sort=\"{html.escape(item.get('date') or '')}\">{day_label(item.get('date'))}</td>"
             f"<td>{html.escape(item.get('district') or '—')}</td>"
             f"<td>{html.escape(item.get('address') or item.get('address_kd') or '—')}</td>"
             f"<td>{html.escape(item.get('status') or '—')}</td>"
