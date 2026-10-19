@@ -243,7 +243,6 @@ def main() -> int:
     if changed:
         save_json(STATE_PATH, {"digest": digest, "checked_at": now.isoformat(timespec="seconds")})
         if not os.getenv("SKIP_TELEGRAM"):
-        if not os.getenv("SKIP_TELEGRAM"):
             msg = (
                 "🔔 <b>Оновлено дані про ярмарки Києва</b>\n"
                 f"GIS API: {len(future_api)} записів на сьогодні/майбутнє.\n"
