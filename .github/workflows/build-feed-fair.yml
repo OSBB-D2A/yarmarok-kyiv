@@ -2,6 +2,12 @@ name: "Ярмарки Києва — API, Waze та сповіщення"
 
 on:
   workflow_dispatch:
+    inputs:
+      force_telegram:
+        description: "Надіслати тестове повідомлення в Telegram навіть без змін даних"
+        required: false
+        type: boolean
+        default: false
   schedule:
     - cron: "0 * * * *"
   push:
@@ -46,6 +52,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          FORCE_TELEGRAM: ${{ inputs.force_telegram }}
         run: python src/monitor_fairs.py
 
       - name: Перевірити сформовані файли
@@ -63,11 +70,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add outpoot/feed_fair.json outpoot/fairs-report.html outpoot/fairs-api.json outpoot/fairs-website.json outpoot/fairs-monitor-state.json
-          if git diff --cached --quiet; then
-            echo "Файли не змінилися."
+          git add outpoot/fairs-monitor-state.json
+          if git diff --cached --quiet -- outpoot/fairs-monitor-state.json; then
+            echo "Дані джерел не змінилися; новий коміт не потрібен."
             exit 0
           fi
+          git add outpoot/feed_fair.json outpoot/fairs-report.html outpoot/fairs-api.json outpoot/fairs-website.json
           git commit -m "Update Kyiv fairs monitoring data"
 
           for attempt in 1 2 3; do
@@ -86,11 +94,12 @@ jobs:
             git reset --hard origin/main
             SKIP_TELEGRAM=1 python src/monitor_fairs.py
             python -m json.tool outpoot/fairs-api.json > /dev/null
-            git add outpoot/feed_fair.json outpoot/fairs-report.html outpoot/fairs-api.json outpoot/fairs-website.json outpoot/fairs-monitor-state.json
-            if git diff --cached --quiet; then
-              echo "Актуальні файли вже є в main."
+            git add outpoot/fairs-monitor-state.json
+            if git diff --cached --quiet -- outpoot/fairs-monitor-state.json; then
+              echo "Актуальні дані джерел уже є в main."
               exit 0
             fi
+            git add outpoot/feed_fair.json outpoot/fairs-report.html outpoot/fairs-api.json outpoot/fairs-website.json
             git commit -m "Update Kyiv fairs monitoring data"
           done
 
