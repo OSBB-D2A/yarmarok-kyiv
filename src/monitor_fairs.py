@@ -10,7 +10,7 @@ import subprocess
 import sys
 import urllib.parse
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -21,7 +21,7 @@ REPORT_PATH = Path("outpoot/fairs-report.html")
 STATE_PATH = Path("outpoot/fairs-monitor-state.json")
 API_JSON_PATH = Path("outpoot/fairs-api.json")
 WEEKDAYS = ("понеділок", "вівторок", "середа", "четвер", "п’ятниця", "субота", "неділя")
-REPORT_URL = "https://raw.githack.com/OSBB-D2A/yarmarok-kyiv/main/outpoot/fairs-report.html"
+REPORT_URL = "https://raw.githack.com/SapozhnikUA/yarmarok-kyiv/main/outpoot/fairs-report.html"
 
 
 def fetch_api_rows() -> list[dict]:
@@ -71,7 +71,7 @@ def day_label(iso_date: str | None) -> str:
         return "Дату не визначено"
     try:
         d = datetime.fromisoformat(iso_date).date()
-        return f"{d:%d.%m.%Y} ({WEEKDAYS[d.weekday()]})"
+        return f"{d:%d.%m.%Y}<br><small>{WEEKDAYS[d.weekday()]}</small>"
     except ValueError:
         return iso_date
 
@@ -114,7 +114,59 @@ _SEGMENT_CACHE: dict[str, list[tuple[str, str]]] = {}
 
 def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
                   incidents: list[dict], api_error: str | None) -> str:
-    now = datetime.now(KYIV).isoformat(timespec="seconds")
+    now_dt = datetime.now(KYIV)
+    now = now_dt.strftime("%d.%m.%Y о %H:%M")
+    cutoff = (now_dt.date() - timedelta(days=90)).isoformat()
+    today_iso = now_dt.date().isoformat()
+    history_rows = [r for r in api_rows if cutoff <= (r.get("date") or "") < today_iso]
+    template_records = [r for r in mapping.get("records", []) if (r.get("description") or "").strip().casefold() == "ярмарок"]
+    template_usage = {}
+    for record in template_records:
+        segments = get_segments(record)
+        streets = list(dict.fromkeys(street for _, street in segments if street))
+        key = str(record.get("place") or "")
+        template_usage[key] = {"place": key, "streets": streets, "count": 0, "latest": ""}
+    unmatched_locations = {}
+    for row in history_rows:
+        addresses = [normalize(row.get("address")), normalize(row.get("address_kd"))]
+        addresses = [a for a in addresses if a]
+        matched_key = None
+        for key, template in template_usage.items():
+            place = normalize(template["place"])
+            streets = [normalize(street) for street in template["streets"]]
+            if any((place and (place in addr or addr in place)) or
+                   any(street and (street in addr or addr in street) for street in streets)
+                   for addr in addresses):
+                matched_key = key
+                break
+        if matched_key is not None:
+            template_usage[matched_key]["count"] += 1
+            template_usage[matched_key]["latest"] = max(template_usage[matched_key]["latest"], row.get("date") or "")
+        else:
+            address = row.get("address") or row.get("address_kd") or "Адресу не вказано"
+            norm_address = normalize(address) or address
+            entry = unmatched_locations.setdefault(norm_address, {"address": address, "district": row.get("district") or "—", "count": 0, "latest": "", "ids": []})
+            entry["count"] += 1
+            entry["latest"] = max(entry["latest"], row.get("date") or "")
+            if row.get("objectid") is not None and len(entry["ids"]) < 3:
+                entry["ids"].append(str(row["objectid"]))
+    archive_rows = []
+    for item in sorted(template_usage.values(), key=lambda x: (-x["count"], normalize(x["place"]))):
+        if item["count"]:
+            archive_rows.append(
+                f'<tr><td>Наявний шаблон</td><td>{html.escape(item["place"])}</td>'
+                f'<td data-sort="{item["count"]}">{item["count"]}</td>'
+                f'<td data-sort="{html.escape(item["latest"])}">{html.escape(item["latest"] or "—")}</td></tr>'
+            )
+    for item in sorted(unmatched_locations.values(), key=lambda x: (-x["count"], normalize(x["address"]))):
+        ids = ", ".join(item["ids"]) or "—"
+        archive_rows.append(
+            f'<tr><td>Не зіставлено — перевірено</td><td>{html.escape(item["address"])}'
+            f'<br><small>{html.escape(item["district"])} · Object ID: {html.escape(ids)}</small></td>'
+            f'<td data-sort="{item["count"]}">{item["count"]}</td>'
+            f'<td data-sort="{html.escape(item["latest"])}">{html.escape(item["latest"] or "—")}</td></tr>'
+        )
+    archive_section = "".join(archive_rows) or '<tr><td colspan="4">За цей період записів не знайдено.</td></tr>'
     future_api = sorted(future_api, key=lambda x: (x["date"], x.get("district") or "", normalize(x.get("address") or x.get("address_kd")), x.get("objectid") or 0))
     # In the report, combine duplicate API rows for the same date/location and
     # show every source objectid in one comma-separated cell.
@@ -150,7 +202,7 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
             feed_status = '<span class="no">Не потрапив у feed</span>'
         rows_html.append(
             "<tr>"
-            f"<td>{html.escape(day_label(item.get('date')))}</td>"
+            f"<td>{day_label(item.get('date'))}</td>"
             f"<td>{html.escape(item.get('district') or '—')}</td>"
             f"<td>{html.escape(item.get('address') or item.get('address_kd') or '—')}</td>"
             f"<td>{html.escape(item.get('status') or '—')}</td>"
@@ -163,7 +215,7 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
     status = "Помилка GIS API" if api_error else ("Є майбутні записи в API" if future_api else "API не має майбутніх дат")
     return f"""<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Моніторинг сезонних ярмарків Києва</title>
+<title>Моніторинг ярмарків Києва</title>
 <style>
 :root{{color-scheme:dark;--bg:#080d18;--panel:#111a2b;--panel2:#172338;--line:#263650;--text:#e8eef8;--muted:#93a4bd;--accent:#7c9cff;--accent2:#54d6c7;--yes:#54d6a0;--no:#ff7b87;--shadow:0 18px 50px #0005}}
 *{{box-sizing:border-box}}
@@ -185,6 +237,8 @@ p{{color:#c2cde0}}.meta{{font-size:.88rem;color:var(--muted);margin:0}}
 table{{width:100%;border-collapse:separate;border-spacing:0;min-width:850px}}
 th,td{{padding:13px 15px;border-bottom:1px solid #223149;text-align:left;vertical-align:top}}
 th{{position:sticky;top:0;background:#18253a;color:#aebed6;font-size:.75rem;text-transform:uppercase;letter-spacing:.07em;white-space:nowrap}}
+th.sortable{{cursor:pointer;user-select:none}}th.sortable:after{{content:" ↕";opacity:.55}}th.sort-asc:after{{content:" ↑";opacity:1}}th.sort-desc:after{{content:" ↓";opacity:1}}
+.rules{{padding-left:22px;color:#c2cde0}}.rules li{{margin:7px 0}}
 tbody tr{{transition:background .15s ease}}tbody tr:hover{{background:#192840}}tbody tr:last-child td{{border-bottom:0}}
 .yes{{display:inline-block;color:#7be0b4;background:#15392f;padding:3px 9px;border-radius:999px;font-size:.8rem;font-weight:700}}
 .no{{display:inline-block;color:#ff9da7;background:#3a202b;padding:3px 9px;border-radius:999px;font-size:.8rem;font-weight:700}}
@@ -193,8 +247,8 @@ footer{{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);color:
 @media(max-width:640px){{main{{padding:14px}}header{{border-radius:18px}}.panel{{padding:15px}}.metric{{padding:14px}}}}
 </style></head><body><main>
 <header><div class="eyebrow">Kyiv · GIS data monitor</div>
-<h1>Моніторинг сезонних ярмарків Києва</h1>
-<p class="meta">Оновлено: {html.escape(now)} · Часовий пояс Europe/Kyiv · Автоматична перевірка щогодини</p></header>
+<h1>Моніторинг ярмарків Києва</h1>
+<p class="meta">Оновлено: {html.escape(now)} · Автоматична перевірка щогодини</p></header>
 <div class="status">
 <div class="metric"><strong>Стан джерела</strong><span>{html.escape(status)}</span></div>
 <div class="metric"><strong>Записи GIS API</strong><span>{len(future_api)}</span></div>
@@ -204,15 +258,49 @@ footer{{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);color:
 </div>
 {api_error_html}
 <section class="panel"><h2>Як формується Waze feed</h2>
-<p>Єдине джерело дат та адрес — офіційний GIS API, шар «Заплановані». До Waze feed потрапляють лише записи, для яких знайдено геометрію в mapping-файлі. Час інцидентів — 07:00–17:00 за київським часом. Дублікати API з однаковою датою та адресою згруповано, а всі Object ID наведено в одному рядку.</p>
+<ul class="rules">
+<li>Єдине джерело дат та адрес — офіційний GIS API, шар «Заплановані».</li>
+<li>До Waze feed потрапляють лише записи, для яких знайдено геометрію в mapping-файлі.</li>
+<li>Час інцидентів — 07:00–17:00 за київським часом.</li>
+<li>Дублікати API з однаковою датою та адресою згруповано, усі Object ID наведено в одному рядку.</li>
+</ul>
 <p class="meta">Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</p></section>
 <h2>Заплановані ярмарки</h2>
-<div class="scroll"><table><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус API</th><th>Object ID</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
+<div class="scroll"><table class="sortable-table"><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус API</th><th>Object ID</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
+<h2>Порівняння з архівом GIS API за останні 90 днів</h2>
+<p class="meta">Період: {cutoff} — {now_dt.date().isoformat()}. Адреси, які не зіставилися з наявними шаблонами, перевірені вручну; нові шаблони за результатами перевірки не додавалися.</p>
+<div class="scroll"><table class="sortable-table"><thead><tr><th>Тип</th><th>Шаблон / адреса з архіву</th><th>Кількість записів</th><th>Остання дата</th></tr></thead><tbody>{archive_section}</tbody></table></div>
 <h2>Джерела та файли</h2><section class="panel"><ul>
 <li><a href="https://gisserver.kyivcity.gov.ua/mayno/rest/services/KYIV_API/Trade_api/MapServer/1" target="_blank" rel="noopener">Офіційний GIS API — шар «Заплановані»</a></li>
-<li><a href="https://github.com/OSBB-D2A/yarmarok-kyiv/blob/main/outpoot/feed_fair.json">Поточний Waze feed JSON</a></li>
-<li><a href="https://github.com/OSBB-D2A/yarmarok-kyiv/blob/main/outpoot/fairs-api.json">Знімок даних GIS API</a></li>
-</ul></section><footer>OSBB-D2A · Автоматичний моніторинг ярмарків Києва</footer>
+<li><a href="https://github.com/SapozhnikUA/yarmarok-kyiv/blob/main/outpoot/feed_fair.json" target="_blank" rel="noopener">Поточний Waze feed JSON</a></li>
+<li><a href="https://github.com/SapozhnikUA/yarmarok-kyiv/blob/main/outpoot/fairs-api.json" target="_blank" rel="noopener">Знімок даних GIS API</a></li>
+<li><a href="https://github.com/SapozhnikUA/yarmarok-kyiv/blob/main/data/waze-location-mapping.json" target="_blank" rel="noopener">Шаблони геометрії Waze</a></li>
+</ul></section><footer>SapozhnikUA/yarmarok-kyiv · Автоматичний моніторинг ярмарків Києва</footer>
+<script>
+document.querySelectorAll("table.sortable-table").forEach(table => {
+  table.querySelectorAll("thead th").forEach((th, index) => {
+    th.classList.add("sortable"); th.tabIndex = 0; th.setAttribute("role", "button");
+    th.setAttribute("aria-label", "Сортувати за стовпцем " + th.textContent.trim());
+    const sort = () => {
+      const tbody = table.tBodies[0], ascending = !th.classList.contains("sort-asc");
+      table.querySelectorAll("thead th").forEach(cell => cell.classList.remove("sort-asc", "sort-desc"));
+      th.classList.add(ascending ? "sort-asc" : "sort-desc");
+      const rows = Array.from(tbody.rows);
+      rows.sort((a, b) => {
+        const ac = a.cells[index], bc = b.cells[index];
+        const av = (ac.dataset.sort || ac.innerText || "").trim(), bv = (bc.dataset.sort || bc.innerText || "").trim();
+        const an = Number(av), bn = Number(bv);
+        const numeric = av !== "" && bv !== "" && Number.isFinite(an) && Number.isFinite(bn);
+        const cmp = numeric ? an - bn : av.localeCompare(bv, "uk", {numeric:true, sensitivity:"base"});
+        return (ascending ? 1 : -1) * cmp;
+      });
+      rows.forEach(row => tbody.appendChild(row));
+    };
+    th.addEventListener("click", sort);
+    th.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); sort(); } });
+  });
+});
+</script>
 </main></body></html>
 """
 
