@@ -21,7 +21,7 @@
 
 ## Сторінка звіту
 
-**[Відкрити читабельну сторінку звіту](https://raw.githack.com/OSBB-D2A/yarmarok-kyiv/main/outpoot/fairs-report.html)**
+**[Відкрити HTML-звіт](https://raw.githack.com/SapozhnikUA/yarmarok-kyiv/main/outpoot/fairs-report.html)** · [GitHub Actions](https://github.com/SapozhnikUA/yarmarok-kyiv/actions) · [Репозиторій](https://github.com/SapozhnikUA/yarmarok-kyiv)
 
 Це посилання відкриває HTML як вебсторінку, а не як вихідний код GitHub. У звіті є посилання для відкриття відповідних локацій у Waze.
 
