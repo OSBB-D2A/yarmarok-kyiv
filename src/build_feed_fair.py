@@ -124,7 +124,7 @@ def address_match_score(api_row: dict, mapping_record: dict, streets: list[str])
     street_values = [value for value in street_values if value]
 
     # Prefer the full mapped location/address, including a house-number range.
-    if place and any(place in value or value in place for value in api_values):
+    if place and any(place in value for value in api_values):
         return 100 + len(place)
     # A street-name match is a fallback; callers only use it when unambiguous.
     if street_values and any(street in value or value in street for street in street_values for value in api_values):
@@ -197,7 +197,14 @@ def main() -> int:
         # Keep all exact matches (a date may cover several mapped segments); if
         # none exists, keep only a unique street fallback to avoid false positives.
         exact = [entry for entry in scored if entry[2]]
-        selected = exact if exact else (scored if len({entry[1] for entry in scored}) == 1 else [])
+        if exact:
+            # When a broad label is contained in a more specific location,
+            # prefer the longest/fullest location match. Keep ties for cases
+            # where the same address intentionally has multiple geometry rows.
+            best_score = max(entry[0] for entry in exact)
+            selected = [entry for entry in exact if entry[0] == best_score]
+        else:
+            selected = scored if len({entry[1] for entry in scored}) == 1 else []
         if not selected:
             unmatched.append(f"{api_row['date'].isoformat()} | ambiguous: {api_row['address'] or api_row['address_kd']}")
             continue
