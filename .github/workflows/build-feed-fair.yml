@@ -54,10 +54,17 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add outpoot/fairs-monitor-state.json
           if git diff --cached --quiet -- outpoot/fairs-monitor-state.json; then
-            echo "Дані GIS API не змінилися; новий коміт не потрібен."
-            exit 0
+            if [ "$GITHUB_EVENT_NAME" != "push" ]; then
+              echo "Дані GIS API не змінилися; новий коміт не потрібен."
+              exit 0
+            fi
+            echo "Запуск після зміни коду: зберігаємо змінені результати навіть без зміни API."
           fi
           git add outpoot/feed_fair.json outpoot/fairs-report.html outpoot/fairs-api.json
+          if git diff --cached --quiet; then
+            echo "Згенеровані файли не змінилися; новий коміт не потрібен."
+            exit 0
+          fi
           git commit -m "Update Kyiv fairs monitoring data"
 
           for attempt in 1 2 3; do
