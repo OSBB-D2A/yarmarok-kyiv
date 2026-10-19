@@ -231,15 +231,16 @@ def main() -> int:
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
     REPORT_PATH.write_text(render_report(api_rows, future_api, mapping, incidents, api_error), encoding="utf-8")
 
-    # Only API data controls change notifications; website data is not used.
-    snapshot = {"api_rows": api_rows, "api_error": api_error}
+    # Notify only for successful API snapshots whose data changed. A temporary
+    # API failure is not a data change and must not generate a Telegram message.
+    snapshot = {"api_rows": api_rows, "api_error": None}
     digest = hashlib.sha256(json.dumps(snapshot, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     previous = {}
     try:
         previous = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         pass
-    changed = previous.get("digest") != digest
+    changed = api_error is None and previous.get("digest") != digest
     if changed:
         save_json(STATE_PATH, {"digest": digest, "checked_at": now.isoformat(timespec="seconds")})
         if not os.getenv("SKIP_TELEGRAM"):
@@ -254,6 +255,8 @@ def main() -> int:
             except Exception as exc:
                 print(f"TELEGRAM ERROR: {exc}", file=sys.stderr)
                 raise
+    elif api_error:
+        print("GIS API request failed; notification and digest update skipped.")
     else:
         print("No GIS API data changes; Telegram notification not sent.")
     print(f"Report saved: {REPORT_PATH}; future API rows: {len(future_api)}; feed incidents: {len(incidents)}")
