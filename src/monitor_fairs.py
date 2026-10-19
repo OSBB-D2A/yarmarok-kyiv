@@ -201,6 +201,13 @@ def main() -> int:
         api_error = str(exc)
         print(f"WARNING: GIS API collection failed: {api_error}", file=sys.stderr)
 
+    # Canonical ordering prevents notification noise caused only by API row order.
+    api_rows.sort(key=lambda row: (
+        row.get("date") or "",
+        row.get("objectid") if row.get("objectid") is not None else 2**63,
+        normalize(row.get("address")),
+        normalize(row.get("address_kd")),
+    ))
     today = now.date().isoformat()
     future_api = [row for row in api_rows if row["date"] >= today]
     mapping = json.loads(MAPPING_PATH.read_text(encoding="utf-8"))
@@ -233,10 +240,9 @@ def main() -> int:
     except (FileNotFoundError, json.JSONDecodeError):
         pass
     changed = previous.get("digest") != digest
-    force_telegram = os.getenv("FORCE_TELEGRAM", "").strip().lower() in {"1", "true", "yes"}
     if changed:
         save_json(STATE_PATH, {"digest": digest, "checked_at": now.isoformat(timespec="seconds")})
-    if changed or force_telegram:
+        if not os.getenv("SKIP_TELEGRAM"):
         if not os.getenv("SKIP_TELEGRAM"):
             msg = (
                 "🔔 <b>Оновлено дані про ярмарки Києва</b>\n"
