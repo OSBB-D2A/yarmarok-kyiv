@@ -13,19 +13,19 @@
 Що робить запуск:
 1. Зчитує список ярмарків з офіційної новини Порталу Києва.
 2. Отримує записи шару «Заплановані» офіційного GIS API.
-3. Порівнює записи сайту з API та геометрією у \`data/waze-location-mapping.json\`.
-4. Формує \`outpoot/feed_fair.json` лише з відповідних записів API, для яких знайдено геометрію. Час інцидентів — 07:00–17:00 за \`Europe/Kyiv\`.
+3. Порівнює записи сайту з API та геометрією у `data/waze-location-mapping.json`.
+4. Формує `outpoot/feed_fair.json` лише з відповідних записів API, для яких знайдено геометрію. Час інцидентів — 07:00–17:00 за `Europe/Kyiv`.
 5. Якщо API тимчасово не містить майбутніх дат або побудова feed не вдалася, залишає останній успішний feed без змін.
 6. Формує HTML-звіт із записами сайту, записами API, статусом потрапляння у feed та посиланнями Waze для локацій, які потрапили у feed.
 7. Надсилає повідомлення в Telegram лише тоді, коли змінився знімок даних сайту або API.
 
 ## Файли результату
 
-- \`outpoot/feed_fair.json\` — стрічка інцидентів для Waze.
-- \`outpoot/fairs-report.html\` — читабельний звіт: сайт → API → Waze feed.
-- \`outpoot/fairs-website.json\` — структурований список із новини Києва.
-- \`outpoot/fairs-api.json\` — отримані записи GIS API та час перевірки.
-- \`outpoot/fairs-monitor-state.json\` — контрольний відбиток останніх перевірених даних, щоб не надсилати однакове повідомлення щогодини.
+- `outpoot/feed_fair.json` — стрічка інцидентів для Waze.
+- `outpoot/fairs-report.html` — читабельний звіт: сайт → API → Waze feed.
+- `outpoot/fairs-website.json` — структурований список із новини Києва.
+- `outpoot/fairs-api.json` — отримані записи GIS API та час перевірки.
+- `outpoot/fairs-monitor-state.json` — контрольний відбиток останніх перевірених даних, щоб не надсилати однакове повідомлення щогодини.
 
 Звіт зберігається в репозиторії: [відкрити fairs-report.html](outpoot/fairs-report.html). Щоб відкрити його як повноцінну вебсторінку, завантажте файл і відкрийте браузером; GitHub може показувати HTML-файл як вихідний код, а не як сайт.
 
@@ -35,8 +35,8 @@
 
 1. Відкрийте **Settings → Secrets and variables → Actions**.
 2. Натисніть **New repository secret**.
-3. Створіть секрет \`TELEGRAM_BOT_TOKEN\` зі значенням токена від BotFather.
-4. Створіть секрет \`TELEGRAM_CHAT_ID\` зі своїм Telegram chat ID.
+3. Створіть секрет `TELEGRAM_BOT_TOKEN` зі значенням токена від BotFather.
+4. Створіть секрет `TELEGRAM_CHAT_ID` зі своїм Telegram chat ID.
 5. Збережіть секрети, відкрийте **Actions → Ярмарки Києва — API, Waze та сповіщення → Run workflow**, увімкніть параметр **Надіслати тестове повідомлення в Telegram навіть без змін даних** (`force_telegram`) і запустіть workflow.
 
 Без цих секретів збір і HTML-звіт працюватимуть, але Telegram-повідомлення пропускатимуться. Не публікуйте токен у чатах, коді, комітах або логах.
@@ -51,7 +51,7 @@
 
 Потрібен Python 3.11 або новіший.
 
-\`\`\`bash
+```bash
 python -m venv .venv
 # Windows:
 .venv\\Scripts\\activate
@@ -61,6 +61,6 @@ source .venv/bin/activate
 pip install -r requirements.txt
 playwright install chromium
 python src/monitor_fairs.py
-\`\`\`
+```
 
-Змінну \`FAIRS_URL\` можна встановити, щоб використати іншу офіційну сторінку новини. Для Telegram локально задайте \`TELEGRAM_BOT_TOKEN\` і \`TELEGRAM_CHAT_ID\` як змінні середовища.
+Змінну `FAIRS_URL` можна встановити, щоб використати іншу офіційну сторінку новини. Для Telegram локально задайте `TELEGRAM_BOT_TOKEN` і `TELEGRAM_CHAT_ID` як змінні середовища.
