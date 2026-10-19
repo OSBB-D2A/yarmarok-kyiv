@@ -97,6 +97,8 @@ def api_match(site_item: dict, api_rows: list[dict]) -> list[dict]:
     return matches
 
 
+_SEGMENT_CACHE: dict[str, list[tuple[str, str]]] = {}
+
 def mapping_feed_status(site_item: dict, mapping: dict, incidents: list[dict]) -> tuple[bool, str | None]:
     site_date = site_item.get("date")
     address = normalize(site_item.get("address"))
@@ -104,8 +106,11 @@ def mapping_feed_status(site_item: dict, mapping: dict, incidents: list[dict]) -
     for record in mapping.get("records", []):
         if (record.get("description") or "").strip().casefold() != "ярмарок":
             continue
+        cache_key = str(record.get("place") or "") + "|" + str(record.get("hash") or "")
+        if cache_key not in _SEGMENT_CACHE:
+            _SEGMENT_CACHE[cache_key] = get_segments(record)
+        segments = _SEGMENT_CACHE[cache_key]
         place = normalize(record.get("place"))
-        segments = get_segments(record)
         streets = list(dict.fromkeys(street for _, street in segments))
         norm_streets = [normalize(street) for street in streets]
         place_match = bool(place and (place in address or address in place))
@@ -205,7 +210,7 @@ def send_telegram(message: str) -> None:
         print("Telegram notification skipped: configure TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID repository secrets.")
         return
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    body = json.dumps({"chat_id": chat_id, "text": message, "disable_web_page_preview": True}).encode()
+    body = json.dumps({"chat_id": chat_id, "text": message, "parse_mode": "HTML", "disable_web_page_preview": True}).encode()
     req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=20) as response:
         result = json.loads(response.read().decode("utf-8"))
