@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-"""Hourly monitor for Kyiv seasonal fairs: official website, GIS API, Waze feed and Telegram."""
+"""Hourly monitor for Kyiv seasonal fairs using only the official GIS API."""
 from __future__ import annotations
 
 import hashlib
 import html
 import json
 import os
-import re
 import subprocess
 import sys
 import urllib.parse
@@ -15,15 +14,14 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from scrape_fairs import DEFAULT_URL, fetch_page
 from build_feed_fair import BASE_URL, FIELDS, KYIV, MAPPING_PATH, OUTPUT_PATH, get_segments, normalize
 
 API_LAYER = 1
 REPORT_PATH = Path("outpoot/fairs-report.html")
 STATE_PATH = Path("outpoot/fairs-monitor-state.json")
-SITE_JSON_PATH = Path("outpoot/fairs-website.json")
 API_JSON_PATH = Path("outpoot/fairs-api.json")
 WEEKDAYS = ("понеділок", "вівторок", "середа", "четвер", "п’ятниця", "субота", "неділя")
+REPORT_URL = "https://raw.githack.com/OSBB-D2A/yarmarok-kyiv/main/outpoot/fairs-report.html"
 
 
 def fetch_api_rows() -> list[dict]:
@@ -78,30 +76,9 @@ def day_label(iso_date: str | None) -> str:
         return iso_date
 
 
-def api_match(site_item: dict, api_rows: list[dict]) -> list[dict]:
-    address = normalize(site_item.get("address"))
-    site_date = site_item.get("date")
-    matches = []
-    for row in api_rows:
-        if site_date and row["date"] != site_date:
-            continue
-        values = [normalize(row.get("address")), normalize(row.get("address_kd"))]
-        values = [v for v in values if v]
-        if address and any(address in v or v in address for v in values):
-            matches.append(row)
-            continue
-        # If the article gives a street plus house range, compare the street part too.
-        site_street = re.split(r",\s*\d| \(", address, maxsplit=1)[0].strip()
-        if len(site_street) >= 8 and any(site_street in v or v in site_street for v in values):
-            matches.append(row)
-    return matches
-
-
-_SEGMENT_CACHE: dict[str, list[tuple[str, str]]] = {}
-
-def mapping_feed_status(site_item: dict, mapping: dict, incidents: list[dict]) -> tuple[bool, str | None]:
-    site_date = site_item.get("date")
-    address = normalize(site_item.get("address"))
+def mapping_feed_status(api_item: dict, mapping: dict, incidents: list[dict]) -> tuple[bool, str | None, str | None]:
+    api_date = api_item.get("date")
+    address = normalize(api_item.get("address") or api_item.get("address_kd"))
     candidates = []
     for record in mapping.get("records", []):
         if (record.get("description") or "").strip().casefold() != "ярмарок":
@@ -119,7 +96,7 @@ def mapping_feed_status(site_item: dict, mapping: dict, incidents: list[dict]) -
             candidates.append((record, segments, streets))
     for record, segments, streets in candidates:
         for incident in incidents:
-            if site_date and incident.get("starttime", "")[:10] != site_date:
+            if api_date and incident.get("starttime", "")[:10] != api_date:
                 continue
             if normalize(incident.get("street")) in {normalize(s) for s in streets}:
                 first = next((p for p in segments if p[0]), None)
@@ -127,61 +104,51 @@ def mapping_feed_status(site_item: dict, mapping: dict, incidents: list[dict]) -
                     coord = first[0].split()
                     if len(coord) >= 2:
                         lat, lon = coord[0], coord[1]
-                        return True, f"https://waze.com/ul?ll={lat}%2C{lon}&navigate=yes"
-    return False, None
+                        waze_url = f"https://waze.com/ul?ll={lat}%2C{lon}&navigate=yes"
+                        return True, waze_url, str(record.get("place") or incident.get("street") or "")
+    return False, None, None
 
 
-def render_report(site_data: dict, api_rows: list[dict], future_api: list[dict], mapping: dict,
-                  incidents: list[dict], api_error: str | None, site_error: str | None) -> str:
+_SEGMENT_CACHE: dict[str, list[tuple[str, str]]] = {}
+
+
+def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
+                  incidents: list[dict], api_error: str | None) -> str:
     now = datetime.now(KYIV).isoformat(timespec="seconds")
-    site_items = site_data.get("fairs", []) if site_data else []
-    site_items = sorted(site_items, key=lambda x: (x.get("date") or "9999", x.get("district") or "", x.get("address") or ""))
     future_api = sorted(future_api, key=lambda x: (x["date"], x.get("district") or "", x.get("address") or ""))
     incident_dates = sorted({i.get("starttime", "")[:10] for i in incidents})
     rows_html = []
-    for item in site_items:
-        matches = api_match(item, api_rows)
-        sent, waze_url = mapping_feed_status(item, mapping, incidents)
-        if matches:
-            api_status = f'<span class="yes">Є збіг в API ({len(matches)})</span>'
+    mapped_count = 0
+    for item in future_api:
+        sent, waze_url, mapped_place = mapping_feed_status(item, mapping, incidents)
+        if sent and waze_url:
+            mapped_count += 1
+            feed_status = (
+                f'<span class="yes">Є у feed</span><br>'
+                f'<a href="{html.escape(waze_url, quote=True)}" target="_blank" rel="noopener">Відкрити локацію у Waze</a>'
+                + (f'<br><small>{html.escape(mapped_place)}</small>' if mapped_place else "")
+            )
         else:
-            api_status = '<span class="no">Не знайдено в API для цієї дати</span>'
-        feed_status = (
-            f'<span class="yes">Є у feed · <a href="{html.escape(waze_url, quote=True)}" target="_blank" rel="noopener">відкрити локацію у Waze</a></span>'
-            if sent and waze_url else '<span class="no">Не потрапила у feed</span>'
-        )
+            feed_status = '<span class="no">Не потрапив у feed</span>'
         rows_html.append(
             "<tr>"
             f"<td>{html.escape(day_label(item.get('date')))}</td>"
             f"<td>{html.escape(item.get('district') or '—')}</td>"
-            f"<td>{html.escape(item.get('address') or '—')}</td>"
-            f"<td>{api_status}</td><td>{feed_status}</td></tr>"
+            f"<td>{html.escape(item.get('address') or item.get('address_kd') or '—')}</td>"
+            f"<td>{html.escape(item.get('status') or '—')}</td>"
+            f"<td>{html.escape(str(item.get('objectid') or '—'))}</td>"
+            f"<td>{feed_status}</td></tr>"
         )
 
-    api_html = []
-    today = datetime.now(KYIV).date().isoformat()
-    for row in future_api:
-        api_html.append(
-            "<tr>"
-            f"<td>{html.escape(day_label(row['date']))}</td>"
-            f"<td>{html.escape(row.get('district') or '—')}</td>"
-            f"<td>{html.escape(row.get('address') or row.get('address_kd') or '—')}</td>"
-            f"<td>{html.escape(row.get('status') or '—')}</td>"
-            f"<td>{html.escape(str(row.get('objectid') or '—'))}</td></tr>"
-        )
-    api_section = "".join(api_html) or '<tr><td colspan="5" class="no">API не повернув записів на сьогодні або майбутні дати.</td></tr>'
-    site_section = "".join(rows_html) or '<tr><td colspan="5" class="no">Не вдалося отримати список із сайту.</td></tr>'
-    api_error_html = f'<p class="error">Помилка API: {html.escape(api_error)}</p>' if api_error else ""
-    site_error_html = f'<p class="error">Помилка сайту: {html.escape(site_error)}</p>' if site_error else ""
-    source_note = (site_data or {}).get("source_note")
-    source_note_html = f'<p class="status"><strong>Примітка до списку:</strong> {html.escape(source_note)}</p>' if source_note else ""
+    api_section = "".join(rows_html) or '<tr><td colspan="6" class="no">GIS API не повернув записів на сьогодні або майбутні дати.</td></tr>'
+    api_error_html = f'<p class="error">Помилка GIS API: {html.escape(api_error)}</p>' if api_error else ""
     status = "Є майбутні записи в API" if future_api else "API не має майбутніх дат"
     return f"""<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Моніторинг сезонних ярмарків Києва</title>
 <style>
 :root{{color-scheme:light dark;--line:#8885;--muted:#777;--yes:#16803c;--no:#b42318}}
-body{{font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:1500px;margin:0 auto;padding:24px}}
+body{{font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;max-width:1600px;margin:0 auto;padding:24px}}
 h1{{line-height:1.2}} .meta{{color:var(--muted)}} .status{{padding:12px 16px;border:1px solid var(--line);border-radius:10px;margin:16px 0}}
 table{{width:100%;border-collapse:collapse;margin:12px 0 28px}}th,td{{padding:9px 10px;border:1px solid var(--line);text-align:left;vertical-align:top}}th{{position:sticky;top:0;background:Canvas}}tr:nth-child(even){{background:color-mix(in srgb,CanvasText 4%,Canvas)}}
 .yes{{color:var(--yes);font-weight:650}}.no,.error{{color:var(--no);font-weight:650}}a{{overflow-wrap:anywhere}}.scroll{{overflow-x:auto}}small{{color:var(--muted)}}
@@ -189,17 +156,15 @@ table{{width:100%;border-collapse:collapse;margin:12px 0 28px}}th,td{{padding:9p
 <h1>Моніторинг сезонних ярмарків Києва</h1>
 <p class="meta">Оновлено: {html.escape(now)} · Часовий пояс Europe/Kyiv</p>
 <div class="status"><strong>Стан:</strong> {html.escape(status)}<br>
-Записи сайту: {len(site_items)} · Записи API на сьогодні/майбутнє: {len(future_api)} · Інциденти у Waze feed: {len(incidents)} · Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</div>
-{site_error_html}{api_error_html}{source_note_html}
-<h2>Порівняння: офіційний сайт → API → Waze feed</h2>
-<p>Сайт — перелік із новини Порталу Києва. API — записи шару «Заплановані» GIS. У feed додаються лише ті записи API, які зіставлено з геометрією в mapping-файлі. Посилання Waze відкриває координати відповідної геометрії.</p>
-<div class="scroll"><table><thead><tr><th>Дата</th><th>Район</th><th>Локація із сайту</th><th>Збіг в API</th><th>У feed / Waze</th></tr></thead><tbody>{site_section}</tbody></table></div>
-<h2>Записи API на сьогодні та майбутні дати</h2>
-<div class="scroll"><table><thead><tr><th>Дата</th><th>Район</th><th>Адреса</th><th>Статус API</th><th>Object ID</th></tr></thead><tbody>{api_section}</tbody></table></div>
-<h2>Файли та джерела</h2><ul>
-<li><a href="{html.escape(DEFAULT_URL, quote=True)}" target="_blank" rel="noopener">Офіційна новина Порталу Києва</a></li>
+Записи GIS API на сьогодні/майбутнє: {len(future_api)} · Зіставлено з геометрією та feed: {mapped_count} · Інциденти у Waze feed: {len(incidents)} · Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</div>
+{api_error_html}
+<h2>GIS API → Waze feed</h2>
+<p>Єдине джерело даних про дати та адреси — офіційний GIS API, шар «Заплановані». У Waze feed додаються лише записи API, для яких знайдено відповідну геометрію в mapping-файлі. Час інцидентів — 07:00–17:00 за київським часом. Посилання Waze відкриває відповідні координати.</p>
+<div class="scroll"><table><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус API</th><th>Object ID</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
+<h2>Джерела та файли</h2><ul>
 <li><a href="https://gisserver.kyivcity.gov.ua/mayno/rest/services/KYIV_API/Trade_api/MapServer/1" target="_blank" rel="noopener">GIS API — шар «Заплановані»</a></li>
 <li><a href="https://github.com/OSBB-D2A/yarmarok-kyiv/blob/main/outpoot/feed_fair.json">Поточний Waze feed JSON</a></li>
+<li><a href="https://github.com/OSBB-D2A/yarmarok-kyiv/blob/main/outpoot/fairs-api.json">Знімок даних GIS API</a></li>
 </ul>
 </body></html>
 """
@@ -222,23 +187,8 @@ def send_telegram(message: str) -> None:
 
 def main() -> int:
     now = datetime.now(KYIV)
-    site_data = None
-    site_error = None
     api_rows: list[dict] = []
     api_error = None
-    try:
-        site_data = fetch_page(os.getenv("FAIRS_URL", DEFAULT_URL))
-        save_json(SITE_JSON_PATH, site_data)
-    except Exception as exc:
-        site_error = str(exc)
-        print(f"WARNING: website collection failed: {site_error}", file=sys.stderr)
-        # Keep the last known website snapshot so the report remains useful when
-        # the portal temporarily returns HTTP 403 or is unavailable.
-        try:
-            site_data = json.loads(SITE_JSON_PATH.read_text(encoding="utf-8"))
-            print(f"Using saved website snapshot ({len(site_data.get('fairs', []))} locations).")
-        except (FileNotFoundError, json.JSONDecodeError):
-            site_data = None
     try:
         api_rows = fetch_api_rows()
         save_json(API_JSON_PATH, {
@@ -254,7 +204,7 @@ def main() -> int:
     today = now.date().isoformat()
     future_api = [row for row in api_rows if row["date"] >= today]
     mapping = json.loads(MAPPING_PATH.read_text(encoding="utf-8"))
-    # Do not replace the last known-good feed with an empty feed when API is stale.
+    # Keep the last known-good feed if the API is empty or feed generation fails.
     if future_api:
         result = subprocess.run([sys.executable, "src/build_feed_fair.py"], text=True, capture_output=True)
         print(result.stdout, end="")
@@ -272,18 +222,10 @@ def main() -> int:
         pass
 
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(
-        render_report(site_data or {}, api_rows, future_api, mapping, incidents, api_error, site_error),
-        encoding="utf-8",
-    )
+    REPORT_PATH.write_text(render_report(api_rows, future_api, mapping, incidents, api_error), encoding="utf-8")
 
-    # Notify only when the fetched source data changes, not on every hourly run.
-    snapshot = {
-        "site_fairs": (site_data or {}).get("fairs", []),
-        "api_rows": api_rows,
-        "site_error": site_error,
-        "api_error": api_error,
-    }
+    # Only API data controls change notifications; website data is not used.
+    snapshot = {"api_rows": api_rows, "api_error": api_error}
     digest = hashlib.sha256(json.dumps(snapshot, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
     previous = {}
     try:
@@ -296,22 +238,20 @@ def main() -> int:
         save_json(STATE_PATH, {"digest": digest, "checked_at": now.isoformat(timespec="seconds")})
     if changed or force_telegram:
         if not os.getenv("SKIP_TELEGRAM"):
-            site_count = len((site_data or {}).get("fairs", []))
             msg = (
                 "🔔 <b>Оновлено дані про ярмарки Києва</b>\n"
-                f"Сайт: {site_count} локацій; GIS API: {len(future_api)} записів на сьогодні/майбутнє.\n"
+                f"GIS API: {len(future_api)} записів на сьогодні/майбутнє.\n"
                 f"У Waze feed зараз {len(incidents)} інцидентів.\n"
-                "Звіт: https://github.com/OSBB-D2A/yarmarok-kyiv/blob/main/outpoot/fairs-report.html"
+                f'📊 <a href="{REPORT_URL}">Відкрити сторінку звіту</a>'
             )
             try:
                 send_telegram(msg)
             except Exception as exc:
-                # A notification failure must fail visibly, but the report and data are preserved.
                 print(f"TELEGRAM ERROR: {exc}", file=sys.stderr)
                 raise
     else:
-        print("No source data changes; Telegram notification not sent.")
-    print(f"Report saved: {REPORT_PATH}; website locations: {len((site_data or {}).get('fairs', []))}; future API rows: {len(future_api)}; feed incidents: {len(incidents)}")
+        print("No GIS API data changes; Telegram notification not sent.")
+    print(f"Report saved: {REPORT_PATH}; future API rows: {len(future_api)}; feed incidents: {len(incidents)}")
     return 0
 
 
