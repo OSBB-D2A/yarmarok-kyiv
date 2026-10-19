@@ -165,8 +165,18 @@ def main() -> int:
         for street in item["streets"]:
             street_to_records[normalize(street)].add(idx)
 
+    # Process API rows deterministically. If the API contains duplicate records
+    # for the same date/location, the lowest objectid is handled first.
+    api_rows.sort(key=lambda row: (
+        row["date"],
+        normalize(row.get("address")),
+        normalize(row.get("address_kd")),
+        row.get("objectid") if row.get("objectid") is not None else 2**63,
+    ))
+
     incidents = []
     unmatched = []
+    seen_location_dates: set[tuple[date, int]] = set()
     for api_row in api_rows:
         scored = []
         for idx, item in enumerate(mapped):
@@ -196,6 +206,17 @@ def main() -> int:
         start = datetime.combine(fair_date, time(7, 0), tzinfo=KYIV).isoformat(timespec="seconds")
         end = datetime.combine(fair_date, time(17, 0), tzinfo=KYIV).isoformat(timespec="seconds")
         for _, idx, _ in selected:
+            # One mapped geometry per date: the GIS API sometimes returns
+            # multiple objectids for the same fair at the same location/date.
+            location_date = (fair_date, idx)
+            if location_date in seen_location_dates:
+                print(
+                    f"DEDUPLICATED API row {api_row.get('objectid')} for "
+                    f"{fair_date.isoformat()} | {mapped[idx]['record'].get('place')}",
+                    file=sys.stderr,
+                )
+                continue
+            seen_location_dates.add(location_date)
             item = mapped[idx]
             for segment_index, (polyline, street) in enumerate(item["segments"], start=1):
                 # Stable unique ID per API date, API record, and geometry segment.
