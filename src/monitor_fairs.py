@@ -277,29 +277,29 @@ footer{{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);color:
 <li><a href="https://github.com/SapozhnikUA/yarmarok-kyiv/blob/main/data/waze-location-mapping.json" target="_blank" rel="noopener">Шаблони геометрії Waze</a></li>
 </ul></section><footer>SapozhnikUA/yarmarok-kyiv · Автоматичний моніторинг ярмарків Києва</footer>
 <script>
-document.querySelectorAll("table.sortable-table").forEach(table => {
-  table.querySelectorAll("thead th").forEach((th, index) => {
+document.querySelectorAll("table.sortable-table").forEach(table => {{
+  table.querySelectorAll("thead th").forEach((th, index) => {{
     th.classList.add("sortable"); th.tabIndex = 0; th.setAttribute("role", "button");
     th.setAttribute("aria-label", "Сортувати за стовпцем " + th.textContent.trim());
-    const sort = () => {
+    const sort = () => {{
       const tbody = table.tBodies[0], ascending = !th.classList.contains("sort-asc");
       table.querySelectorAll("thead th").forEach(cell => cell.classList.remove("sort-asc", "sort-desc"));
       th.classList.add(ascending ? "sort-asc" : "sort-desc");
       const rows = Array.from(tbody.rows);
-      rows.sort((a, b) => {
+      rows.sort((a, b) => {{
         const ac = a.cells[index], bc = b.cells[index];
         const av = (ac.dataset.sort || ac.innerText || "").trim(), bv = (bc.dataset.sort || bc.innerText || "").trim();
         const an = Number(av), bn = Number(bv);
         const numeric = av !== "" && bv !== "" && Number.isFinite(an) && Number.isFinite(bn);
-        const cmp = numeric ? an - bn : av.localeCompare(bv, "uk", {numeric:true, sensitivity:"base"});
+        const cmp = numeric ? an - bn : av.localeCompare(bv, "uk", {{numeric:true, sensitivity:"base"}});
         return (ascending ? 1 : -1) * cmp;
-      });
+      }});
       rows.forEach(row => tbody.appendChild(row));
-    };
+    }};
     th.addEventListener("click", sort);
-    th.addEventListener("keydown", event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); sort(); } });
-  });
-});
+    th.addEventListener("keydown", event => {{ if (event.key === "Enter" || event.key === " ") {{ event.preventDefault(); sort(); }} }});
+  }});
+}});
 </script>
 </main></body></html>
 """
