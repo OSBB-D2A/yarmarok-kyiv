@@ -173,6 +173,8 @@ def render_report(site_data: dict, api_rows: list[dict], future_api: list[dict],
     site_section = "".join(rows_html) or '<tr><td colspan="5" class="no">Не вдалося отримати список із сайту.</td></tr>'
     api_error_html = f'<p class="error">Помилка API: {html.escape(api_error)}</p>' if api_error else ""
     site_error_html = f'<p class="error">Помилка сайту: {html.escape(site_error)}</p>' if site_error else ""
+    source_note = (site_data or {}).get("source_note")
+    source_note_html = f'<p class="status"><strong>Примітка до списку:</strong> {html.escape(source_note)}</p>' if source_note else ""
     status = "Є майбутні записи в API" if future_api else "API не має майбутніх дат"
     return f"""<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -188,7 +190,7 @@ table{{width:100%;border-collapse:collapse;margin:12px 0 28px}}th,td{{padding:9p
 <p class="meta">Оновлено: {html.escape(now)} · Часовий пояс Europe/Kyiv</p>
 <div class="status"><strong>Стан:</strong> {html.escape(status)}<br>
 Записи сайту: {len(site_items)} · Записи API на сьогодні/майбутнє: {len(future_api)} · Інциденти у Waze feed: {len(incidents)} · Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</div>
-{site_error_html}{api_error_html}
+{site_error_html}{api_error_html}{source_note_html}
 <h2>Порівняння: офіційний сайт → API → Waze feed</h2>
 <p>Сайт — перелік із новини Порталу Києва. API — записи шару «Заплановані» GIS. У feed додаються лише ті записи API, які зіставлено з геометрією в mapping-файлі. Посилання Waze відкриває координати відповідної геометрії.</p>
 <div class="scroll"><table><thead><tr><th>Дата</th><th>Район</th><th>Локація із сайту</th><th>Збіг в API</th><th>У feed / Waze</th></tr></thead><tbody>{site_section}</tbody></table></div>
@@ -288,8 +290,11 @@ def main() -> int:
         previous = json.loads(STATE_PATH.read_text(encoding="utf-8"))
     except (FileNotFoundError, json.JSONDecodeError):
         pass
-    if previous.get("digest") != digest:
+    changed = previous.get("digest") != digest
+    force_telegram = os.getenv("FORCE_TELEGRAM", "").strip().lower() in {"1", "true", "yes"}
+    if changed:
         save_json(STATE_PATH, {"digest": digest, "checked_at": now.isoformat(timespec="seconds")})
+    if changed or force_telegram:
         if not os.getenv("SKIP_TELEGRAM"):
             site_count = len((site_data or {}).get("fairs", []))
             msg = (
