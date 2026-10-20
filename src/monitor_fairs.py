@@ -248,7 +248,7 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
 
     api_section = "".join(rows_html) or '<tr><td colspan="6" class="no">GIS API не повернув записів на сьогодні або майбутні дати.</td></tr>'
     api_error_html = f'<p class="error">Помилка GIS API: {html.escape(api_error)}</p>' if api_error else ""
-    status = "Помилка GIS API" if api_error else ("Є майбутні" if future_api else "Немає майбутніх")
+    status = "Помилка GIS API" if api_error else ("Є заплановані" if future_api else "Немає запланованих")
     return f"""<!doctype html>
 <html lang="uk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Моніторинг ярмарків Києва</title>
