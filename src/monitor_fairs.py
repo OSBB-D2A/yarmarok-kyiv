@@ -296,7 +296,7 @@ footer{{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);color:
 <div class="metric"><strong>Стан джерела</strong><span>{html.escape(status)}</span></div>
 <div class="metric"><strong>Записи GIS API</strong><span>{len(future_api)}</span></div>
 <div class="metric"><strong>Унікальні локації / дати</strong><span>{len(report_rows)}</span></div>
-<div class="metric"><strong>Інциденти у Waze feed</strong><span>{len(incidents)}</span></div>
+<div class="metric"><strong>Сегменти у Waze feed</strong><span>{len(incidents)}</span></div>
 <div class="metric"><strong>Зіставлено з геометрією</strong><span>{mapped_count}</span></div>
 </div>
 {api_error_html}
