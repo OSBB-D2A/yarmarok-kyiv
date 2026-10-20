@@ -304,7 +304,7 @@ footer{{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);color:
 <ul class="rules">
 <li>Єдине джерело дат та адрес — офіційний GIS API, шар «Заплановані».</li>
 <li>До Waze feed потрапляють лише записи, для яких знайдено геометрію в mapping-файлі.</li>
-<li>Час інцидентів — 07:00–17:00 за київським часом.</li>
+<li>Період перекриття у Waze — 07:00–17:00 за київським часом.</li>
 <li>Дублікати API з однаковою датою та адресою згруповано, усі Object ID наведено в одному рядку.</li>
 </ul>
 <p class="meta">Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</p></section>
