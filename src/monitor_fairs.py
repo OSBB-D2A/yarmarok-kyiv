@@ -135,9 +135,21 @@ _SEGMENT_CACHE: dict[str, list[tuple[str, str]]] = {}
 
 
 def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
-                  incidents: list[dict], api_error: str | None) -> str:
+                  incidents: list[dict], api_error: str | None,
+                  api_checked_at: str | None) -> str:
     now_dt = datetime.now(KYIV)
     now = now_dt.strftime("%d.%m.%Y о %H:%M")
+    if api_checked_at:
+        try:
+            checked_dt = datetime.fromisoformat(api_checked_at).astimezone(KYIV)
+            checked_label = checked_dt.strftime("%d.%m.%Y о %H:%M")
+        except (ValueError, TypeError):
+            checked_label = api_checked_at
+    else:
+        checked_label = "ще не було"
+    api_state_class = "api-down" if api_error else "api-up"
+    api_state_label = "GIS API недоступний" if api_error else "GIS API доступний"
+    api_check_label = "Останній успішний запит GIS API" if api_error else "GIS API отримано"
     cutoff = (now_dt.date() - timedelta(days=90)).isoformat()
     today_iso = now_dt.date().isoformat()
     history_rows = [r for r in api_rows if cutoff <= (r.get("date") or "") < today_iso]
@@ -251,6 +263,11 @@ header:after{{content:"";position:absolute;width:230px;height:230px;right:-75px;
 h1{{font-size:clamp(1.8rem,4vw,3rem);line-height:1.12;letter-spacing:-.04em;margin:.55rem 0 1rem;max-width:850px}}
 h2{{font-size:1.2rem;letter-spacing:-.02em;margin:32px 0 12px}}
 p{{color:#c2cde0}}.meta{{font-size:.88rem;color:var(--muted);margin:0}}
+.api-indicator{{display:inline-flex;align-items:center;gap:8px;margin-top:7px;font-size:.88rem;font-weight:700}}
+.api-dot{{width:10px;height:10px;display:inline-block;border-radius:50%;box-shadow:0 0 0 3px #ffffff0c}}
+.api-up .api-dot{{background:var(--yes);box-shadow:0 0 0 3px #54d6a022}}
+.api-down .api-dot{{background:var(--no);box-shadow:0 0 0 3px #ff7b8722}}
+.api-up{{color:var(--yes)}}.api-down{{color:var(--no)}}
 .status{{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:20px 0}}
 .metric{{padding:18px 20px;border:1px solid var(--line);border-radius:16px;background:linear-gradient(145deg,#17243a,#101827);min-width:0}}
 .metric strong{{display:block;color:var(--muted);font-size:.78rem;font-weight:650;margin-bottom:6px}}
@@ -272,7 +289,9 @@ footer{{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);color:
 </style></head><body><main>
 <header><div class="eyebrow">Kyiv · GIS data monitor</div>
 <h1>Моніторинг ярмарків Києва</h1>
-<p class="meta">Оновлено: {html.escape(now)} · Автоматична перевірка щогодини</p></header>
+<p class="meta">Звіт сформовано: {html.escape(now)} · Автоматична перевірка щогодини</p>
+<div class="api-indicator {api_state_class}"><span class="api-dot"></span>{html.escape(api_state_label)}</div>
+<p class="meta">{html.escape(api_check_label)}: {html.escape(checked_label)}</p></header>
 <div class="status">
 <div class="metric"><strong>Стан джерела</strong><span>{html.escape(status)}</span></div>
 <div class="metric"><strong>Записи GIS API</strong><span>{len(future_api)}</span></div>
@@ -360,6 +379,13 @@ def main() -> int:
         api_error = str(exc)
         print(f"WARNING: GIS API collection failed: {api_error}", file=sys.stderr)
 
+    # Keep the last successful API timestamp visible even when the current request fails.
+    try:
+        saved_snapshot = json.loads(API_JSON_PATH.read_text(encoding="utf-8"))
+        api_checked_at = saved_snapshot.get("checked_at")
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        api_checked_at = None
+
     # Canonical ordering prevents notification noise caused only by API row order.
     api_rows.sort(key=lambda row: (
         row.get("date") or "",
@@ -388,7 +414,10 @@ def main() -> int:
         pass
 
     REPORT_PATH.parent.mkdir(parents=True, exist_ok=True)
-    REPORT_PATH.write_text(render_report(api_rows, future_api, mapping, incidents, api_error), encoding="utf-8")
+    REPORT_PATH.write_text(
+        render_report(api_rows, future_api, mapping, incidents, api_error, api_checked_at),
+        encoding="utf-8",
+    )
 
     # Persist outage state only when it changes; this avoids hourly commits.
     # If the GIS API stays unavailable for 14 full days, alert on day 15 and
