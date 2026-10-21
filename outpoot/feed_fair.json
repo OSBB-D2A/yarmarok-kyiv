@@ -1,66 +1,6 @@
 {
   "incidents": [
     {
-      "polyline": "50.486591413433 30.602998043562 50.486772516674 30.604268984955",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-20T07:00:00+03:00",
-      "endtime": "2026-10-20T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261020_693088_1",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Івана Микитенка"
-    },
-    {
-      "polyline": "50.486772516674 30.604268984955 50.486832247778 30.604688165368",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-20T07:00:00+03:00",
-      "endtime": "2026-10-20T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261020_693088_2",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Івана Микитенка"
-    },
-    {
-      "polyline": "50.486832247778 30.604688165368 50.486873952821 30.604980842947",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-20T07:00:00+03:00",
-      "endtime": "2026-10-20T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261020_693088_3",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Івана Микитенка"
-    },
-    {
-      "polyline": "50.486873952821 30.604980842947 50.487066177012 30.60632983689",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-20T07:00:00+03:00",
-      "endtime": "2026-10-20T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261020_693088_4",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Івана Микитенка"
-    },
-    {
-      "polyline": "50.487066177012 30.60632983689 50.487393143708 30.608624441497",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-20T07:00:00+03:00",
-      "endtime": "2026-10-20T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261020_693088_5",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Івана Микитенка"
-    },
-    {
       "polyline": "50.399952188195 30.527951315963 50.400083673203 30.526499737396",
       "direction": "BOTH_DIRECTIONS",
       "starttime": "2026-10-21T07:00:00+03:00",
