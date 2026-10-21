@@ -53,12 +53,16 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add outpoot/fairs-monitor-state.json
-          if git diff --cached --quiet -- outpoot/fairs-monitor-state.json; then
-            if [ "$GITHUB_EVENT_NAME" != "push" ]; then
-              echo "Дані GIS API не змінилися; новий коміт не потрібен."
+          if git diff --cached --quiet -- outpoot/fairs-monitor-state.json && [ "$GITHUB_EVENT_NAME" != "push" ]; then
+            # State is unchanged most hours. Still publish the newly generated report
+            # when its Kyiv calendar date changes, so yesterday's fairs disappear.
+            old_report_date="$(git show HEAD:outpoot/fairs-report.html 2>/dev/null | grep -oE 'Звіт сформовано: [0-9]{2}\\.[0-9]{2}\\.[0-9]{4}' | head -n 1 || true)"
+            new_report_date="$(grep -oE 'Звіт сформовано: [0-9]{2}\\.[0-9]{2}\\.[0-9]{4}' outpoot/fairs-report.html | head -n 1 || true)"
+            if [ -n "$old_report_date" ] && [ "$old_report_date" = "$new_report_date" ]; then
+              echo "Дані GIS API та дата звіту не змінилися; новий коміт не потрібен."
               exit 0
             fi
-            echo "Запуск після зміни коду: зберігаємо змінені результати навіть без зміни API."
+            echo "Дата звіту змінилася: публікуємо актуальні дані й прибираємо минулі ярмарки."
           fi
           git add outpoot/feed_fair.json outpoot/fairs-report.html outpoot/fairs-api.json
           if git diff --cached --quiet; then
