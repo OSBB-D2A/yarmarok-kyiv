@@ -204,10 +204,14 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
         )
     archive_section = "".join(archive_rows) or '<tr><td colspan="4">За цей період записів не знайдено.</td></tr>'
     future_api = sorted(future_api, key=lambda x: (x["date"], x.get("district") or "", normalize(x.get("address") or x.get("address_kd")), x.get("objectid") or 0))
+    # Keep past fairs visible for context, but show their effective status as
+    # "Закінчилось" once their scheduled date is before today in Kyiv.
+    display_rows = [row for row in api_rows if row.get("date")]
+    display_rows.sort(key=lambda x: (x["date"], x.get("district") or "", normalize(x.get("address") or x.get("address_kd")), x.get("objectid") or 0))
     # In the report, combine duplicate API rows for the same date/location and
     # show every source objectid in one comma-separated cell.
     grouped: dict[tuple[str, str, str], list[dict]] = {}
-    for item in future_api:
+    for item in display_rows:
         location = normalize(item.get("address") or item.get("address_kd"))
         key = (item.get("date") or "", item.get("district") or "", location)
         grouped.setdefault(key, []).append(item)
@@ -219,8 +223,11 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
             key=lambda value: (not value.isdigit(), int(value) if value.isdigit() else value),
         )
         item["objectids"] = ", ".join(objectids) or "—"
-        statuses = list(dict.fromkeys(row.get("status") for row in items if row.get("status")))
-        item["status"] = ", ".join(statuses) or ""
+        if item.get("date", "") < today_iso:
+            item["status"] = "Закінчилось"
+        else:
+            statuses = list(dict.fromkeys(row.get("status") for row in items if row.get("status")))
+            item["status"] = ", ".join(statuses) or ""
         report_rows.append(item)
     incident_dates = sorted({i.get("starttime", "")[:10] for i in incidents})
     rows_html = []
@@ -246,7 +253,7 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
             f"<td>{feed_status}</td></tr>"
         )
 
-    api_section = "".join(rows_html) or '<tr><td colspan="6" class="no">GIS API не повернув записів на сьогодні або майбутні дати.</td></tr>'
+    api_section = "".join(rows_html) or '<tr><td colspan="6" class="no">GIS API не повернув записів.</td></tr>'
     api_error_html = f'<p class="error">Помилка GIS API: {html.escape(api_error)}</p>' if api_error else ""
     status = "Помилка GIS API" if api_error else ("Є заплановані" if future_api else "Немає запланованих")
     return f"""<!doctype html>
@@ -308,8 +315,8 @@ footer{{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);color:
 <li>Дублікати API з однаковою датою та адресою згруповано, усі Object ID наведено в одному рядку.</li>
 </ul>
 <p class="meta">Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</p></section>
-<h2>Заплановані ярмарки</h2>
-<div class="scroll"><table class="sortable-table"><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус API</th><th>Object ID</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
+<h2>Ярмарки: заплановані та завершені</h2>
+<div class="scroll"><table class="sortable-table"><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус ярмарку</th><th>Object ID</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
 <h2>Порівняння з архівом GIS API за останні 90 днів</h2>
 <p class="meta">Період: {cutoff} — {now_dt.date().isoformat()}. Адреси, які не зіставилися з наявними шаблонами, перевірені вручну; нові шаблони за результатами перевірки не додавалися.</p>
 <div class="scroll"><table class="sortable-table"><thead><tr><th>Тип</th><th>Шаблон / адреса з архіву</th><th>Кількість записів</th><th>Остання дата</th></tr></thead><tbody>{archive_section}</tbody></table></div>
