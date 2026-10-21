@@ -154,8 +154,9 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
     future_api = sorted(future_api, key=lambda x: (x["date"], x.get("district") or "", normalize(x.get("address") or x.get("address_kd")), x.get("objectid") or 0))
     # Keep past fairs visible for context, but show their effective status as
     # "Закінчилось" once their scheduled date is before today in Kyiv.
-    display_cutoff = (now_dt.date() - timedelta(days=7)).isoformat()
-    display_rows = [row for row in api_rows if row.get("date") and row["date"] >= display_cutoff]
+    # Show fairs from the start of the current Monday–Sunday week and all upcoming dates.
+    week_start = (now_dt.date() - timedelta(days=now_dt.weekday())).isoformat()
+    display_rows = [row for row in api_rows if row.get("date") and row["date"] >= week_start]
     display_rows.sort(key=lambda x: (x["date"], x.get("district") or "", normalize(x.get("address") or x.get("address_kd")), x.get("objectid") or 0))
     # In the report, combine duplicate API rows for the same date/location and
     # show every source objectid in one comma-separated cell.
