@@ -150,59 +150,7 @@ def render_report(api_rows: list[dict], future_api: list[dict], mapping: dict,
     api_state_class = "api-down" if api_error else "api-up"
     api_state_label = "GIS API недоступний" if api_error else "GIS API доступний"
     api_check_label = "Останній успішний запит GIS API" if api_error else "GIS API отримано"
-    cutoff = (now_dt.date() - timedelta(days=90)).isoformat()
     today_iso = now_dt.date().isoformat()
-    history_rows = [r for r in api_rows if cutoff <= (r.get("date") or "") < today_iso]
-    template_records = [r for r in mapping.get("records", []) if (r.get("description") or "").strip().casefold() == "ярмарок"]
-    template_usage = {}
-    for record in template_records:
-        segments = get_segments(record)
-        streets = list(dict.fromkeys(street for _, street in segments if street))
-        key = str(record.get("place") or "")
-        template_usage[key] = {"place": key, "record": record, "streets": streets, "count": 0, "latest": ""}
-    unmatched_locations = {}
-    for row in history_rows:
-        addresses = [normalize(row.get("address")), normalize(row.get("address_kd"))]
-        addresses = [a for a in addresses if a]
-        scored_templates = []
-        for key, template in template_usage.items():
-            score = address_match_score(row, template["record"], template["streets"])
-            if score >= 100:
-                scored_templates.append((score, key))
-        matched_key = None
-        if scored_templates:
-            best_score = max(score for score, _ in scored_templates)
-            best = [key for score, key in scored_templates if score == best_score]
-            if len(best) == 1:
-                matched_key = best[0]
-        if matched_key is not None:
-            template_usage[matched_key]["count"] += 1
-            template_usage[matched_key]["latest"] = max(template_usage[matched_key]["latest"], row.get("date") or "")
-        else:
-            address = row.get("address") or row.get("address_kd") or "Адресу не вказано"
-            norm_address = normalize(address) or address
-            entry = unmatched_locations.setdefault(norm_address, {"address": address, "district": row.get("district") or "—", "count": 0, "latest": "", "ids": []})
-            entry["count"] += 1
-            entry["latest"] = max(entry["latest"], row.get("date") or "")
-            if row.get("objectid") is not None and len(entry["ids"]) < 3:
-                entry["ids"].append(str(row["objectid"]))
-    archive_rows = []
-    for item in sorted(template_usage.values(), key=lambda x: (-x["count"], normalize(x["place"]))):
-        if item["count"]:
-            archive_rows.append(
-                f'<tr><td>Наявний шаблон</td><td>{html.escape(item["place"])}</td>'
-                f'<td data-sort="{item["count"]}">{item["count"]}</td>'
-                f'<td data-sort="{html.escape(item["latest"])}">{html.escape(item["latest"] or "—")}</td></tr>'
-            )
-    for item in sorted(unmatched_locations.values(), key=lambda x: (-x["count"], normalize(x["address"]))):
-        ids = ", ".join(item["ids"]) or "—"
-        archive_rows.append(
-            f'<tr><td>Не зіставлено — перевірено</td><td>{html.escape(item["address"])}'
-            f'<br><small>{html.escape(item["district"])} · Object ID: {html.escape(ids)}</small></td>'
-            f'<td data-sort="{item["count"]}">{item["count"]}</td>'
-            f'<td data-sort="{html.escape(item["latest"])}">{html.escape(item["latest"] or "—")}</td></tr>'
-        )
-    archive_section = "".join(archive_rows) or '<tr><td colspan="4">За цей період записів не знайдено.</td></tr>'
     future_api = sorted(future_api, key=lambda x: (x["date"], x.get("district") or "", normalize(x.get("address") or x.get("address_kd")), x.get("objectid") or 0))
     # Keep past fairs visible for context, but show their effective status as
     # "Закінчилось" once their scheduled date is before today in Kyiv.
@@ -318,9 +266,6 @@ footer{{margin-top:28px;padding-top:18px;border-top:1px solid var(--line);color:
 <p class="meta">Дати у feed: {html.escape(", ".join(incident_dates) or "немає")}</p></section>
 <h2>Ярмарки: заплановані та завершені</h2>
 <div class="scroll"><table class="sortable-table"><thead><tr><th>Дата</th><th>Район</th><th>Адреса з API</th><th>Статус ярмарку</th><th>Object ID</th><th>У feed / Waze</th></tr></thead><tbody>{api_section}</tbody></table></div>
-<h2>Порівняння з архівом GIS API за останні 90 днів</h2>
-<p class="meta">Період: {cutoff} — {now_dt.date().isoformat()}. Адреси, які не зіставилися з наявними шаблонами, перевірені вручну; нові шаблони за результатами перевірки не додавалися.</p>
-<div class="scroll"><table class="sortable-table"><thead><tr><th>Тип</th><th>Шаблон / адреса з архіву</th><th>Кількість записів</th><th>Остання дата</th></tr></thead><tbody>{archive_section}</tbody></table></div>
 <h2>Джерела та файли</h2><section class="panel"><ul>
 <li><a href="https://gisserver.kyivcity.gov.ua/mayno/rest/services/KYIV_API/Trade_api/MapServer/1" target="_blank" rel="noopener">Офіційний GIS API — шар «Заплановані»</a></li>
 <li><a href="https://github.com/SapozhnikUA/yarmarok-kyiv/blob/main/outpoot/feed_fair.json" target="_blank" rel="noopener">Поточний Waze feed JSON</a></li>
