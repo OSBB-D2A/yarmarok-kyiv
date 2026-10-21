@@ -1,54 +1,6 @@
 {
   "incidents": [
     {
-      "polyline": "50.399952188195 30.527951315963 50.400083673203 30.526499737396",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-21T07:00:00+03:00",
-      "endtime": "2026-10-21T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261021_693644_1",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "Стратегічне шосе"
-    },
-    {
-      "polyline": "50.399805712518 30.52928321809 50.399952188195 30.527951315963",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-21T07:00:00+03:00",
-      "endtime": "2026-10-21T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261021_693644_2",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "Стратегічне шосе"
-    },
-    {
-      "polyline": "50.475476810432 30.338128094247 50.473961902759 30.338418564357",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-21T07:00:00+03:00",
-      "endtime": "2026-10-21T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261021_693675_1",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Підлісна"
-    },
-    {
-      "polyline": "50.477487822997 30.337764042422 50.475476810432 30.338128094247",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-21T07:00:00+03:00",
-      "endtime": "2026-10-21T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261021_693675_2",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Підлісна"
-    },
-    {
       "polyline": "50.473497611781 30.508484320261 50.473972169822 30.50852783167",
       "direction": "BOTH_DIRECTIONS",
       "starttime": "2026-10-22T07:00:00+03:00",
