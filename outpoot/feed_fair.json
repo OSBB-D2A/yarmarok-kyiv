@@ -1,42 +1,6 @@
 {
   "incidents": [
     {
-      "polyline": "50.473497611781 30.508484320261 50.473972169822 30.50852783167",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-22T07:00:00+03:00",
-      "endtime": "2026-10-22T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261022_694126_1",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Юрківська"
-    },
-    {
-      "polyline": "50.472228007988 30.506865443496 50.472703588788 30.507564547484",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-22T07:00:00+03:00",
-      "endtime": "2026-10-22T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261022_694126_2",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Юрківська"
-    },
-    {
-      "polyline": "50.472703588788 30.507564547484 50.473135715397 30.508200006105 50.473313249818 30.508382396318 50.473497611781 30.508484320261",
-      "direction": "BOTH_DIRECTIONS",
-      "starttime": "2026-10-22T07:00:00+03:00",
-      "endtime": "2026-10-22T17:00:00+03:00",
-      "description": "Ярмарок",
-      "event": "Fair",
-      "id": "UA20261022_694126_3",
-      "type": "ROAD_CLOSED",
-      "subtype": "ROAD_CLOSED_EVENT",
-      "street": "вул. Юрківська"
-    },
-    {
       "polyline": "50.47495033105694 30.620962135984346 50.475256476650074 30.622061914634887",
       "direction": "BOTH_DIRECTIONS",
       "starttime": "2026-10-23T07:00:00+03:00",
